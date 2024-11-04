@@ -140,20 +140,32 @@ Value builtin_subscript(AstNode expression, Evaluator &ev) {
   }
 }
 
-Value builtin_size(AstNode expression, Evaluator &ev) {
-  auto args = ev.arena.as_array_like(expression).value();
-  AstNode first = args[0];
-  switch (first.get_kind()) {
+Value builtin_size_json(AstNode json, Evaluator &ev) {
+  switch (json.get_kind()) {
   case NodeKind::ARRAY:
-    return Value::number(first.get_data());
+    return Value::number(json.get_data());
   case NodeKind::OBJECT: {
-    size_t num = first.get_data() / 2;
+    size_t num = json.get_data() / 2;
     return Value::number((double)num);
   }
   case NodeKind::STRING:
-    return Value::number(ev.arena.as_string_like(first)->size());
+    return Value::number(ev.arena.as_string_like(json)->size());
   default:
-    ev.error("Unhandled argument of size()");
+    ev.error("Size is not applicable");
+    return Value::error();
+  }
+}
+
+Value builtin_size(AstNode expression, Evaluator &ev) {
+  auto args = ev.arena.as_array_like(expression).value();
+  Value first = eval(args[0], ev);
+  switch (first.get_kind()) {
+  case ValueKind::JSON:
+    return builtin_size_json(first.get_data().json, ev);
+  case ValueKind::STRING:
+    return Value::number(first.get_data().string.size());
+  default:
+    ev.error("Size is not applicable");
     return Value::error();
   }
 }
