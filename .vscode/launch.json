@@ -11,7 +11,8 @@
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/build/src/json_eval",
             "args": [
-                "test.json"
+                "tests/test.json",
+                "max(a.b[0], 10, a.b[1], 15)"
             ],
             "cwd": "${workspaceFolder}",
             "presentation": {

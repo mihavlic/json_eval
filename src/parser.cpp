@@ -1,7 +1,5 @@
 #include "parser.h"
 
-int Parser::peek() const { return current; }
-
 int Parser::next() {
   if (current == '\n') {
     line++;
@@ -11,7 +9,7 @@ int Parser::next() {
   }
 
   int prev = current;
-  current = file.get();
+  current = file->get();
   return prev;
 }
 
@@ -45,8 +43,12 @@ void Parser::error(const char *message) {
   errors.push_back(ParseError{line, column, message});
 }
 
-void Parser::report_errors(const char *filename) const {
+void Parser::report_errors(const char *filename) {
+  if (!errors.empty()) {
+    printf("\n<<Errors>>\n");
+  }
   for (const ParseError &error : errors) {
     printf("%s:%d:%d %s\n", filename, error.line, error.column, error.message);
   }
+  errors.clear();
 }
