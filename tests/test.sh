@@ -2,8 +2,12 @@ function test() {
     echo ">>> $1"
     echo -n "<<< "
     ./build/src/json_eval tests/test.json "$1" | tail -n 1
-    echo -e "### Should be $2\n"
+    echo -e "### $2\n"
 }
+
+echo ">>> input"
+echo "<<< output"
+echo "### expected"
 
 test "a.b[1]"       '2'
 test "a.b[2].c"     'test'
