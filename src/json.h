@@ -1,7 +1,8 @@
 #pragma once
 
+#include "parser.h"
 #include <cstddef>
-#include <fstream>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -92,19 +93,6 @@ public:
   static JsonNode error() { return JsonNode(JsonNodeKind::ERROR, {}, {}); }
 };
 
-struct JsonField {
-  JsonNode name;
-  JsonNode value;
-};
-
-struct JsonMap {
-  std::span<JsonField> fields;
-};
-
-struct JsonArray {
-  std::span<JsonNode> values;
-};
-
 class JsonArena {
   std::vector<char> string_arena;
   std::vector<JsonNode> node_arena;
@@ -149,46 +137,12 @@ public:
 
   void debug_print_impl(JsonNode node, int depth);
   void debug_print(JsonNode node);
+
+  std::optional<std::string_view> as_string(JsonNode node);
+  std::optional<double> as_number(JsonNode node) const;
+  std::optional<bool> as_boolean(JsonNode node) const;
+  std::optional<std::span<JsonNode>> as_object(JsonNode node);
+  std::optional<std::span<JsonNode>> as_array(JsonNode node);
 };
 
-struct ParseError {
-  int line;
-  int column;
-  const char *message;
-};
-
-class JsonParser {
-  std::ifstream &file;
-  int current;
-  int line;
-  int column;
-  std::vector<ParseError> errors;
-
-public:
-  JsonParser(std::ifstream &file) : file(file), line(0), column(0) {
-    current = this->file.get();
-  }
-
-  int peek() const;
-
-  int next();
-
-  template <typename F> int tryConsume(F fun) {
-    int peek = current;
-    if (fun(peek)) {
-      next();
-      return peek;
-    }
-    return 0;
-  }
-
-  int eat(char c);
-
-  bool at(char c) const;
-
-  void error(const char *message);
-
-  void report_errors(const char *filename) const;
-};
-
-JsonNode parse_json(JsonParser &p, JsonArena &arena);
+JsonNode parse_json(Parser &p, JsonArena &arena);

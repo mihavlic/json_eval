@@ -40,7 +40,7 @@ int main(int argc, const char *argv[]) {
   }
 
   JsonArena json_arena{};
-  JsonParser parser(file);
+  Parser parser(file);
 
   auto v = parse_json(parser, json_arena);
   json_arena.debug_print(v);

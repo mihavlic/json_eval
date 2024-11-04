@@ -1,5 +1,6 @@
 #include "json.h"
 #include "util.h"
+
 #include <cassert>
 #include <charconv>
 #include <cstdint>
@@ -75,27 +76,32 @@ void JsonArena::debug_print_impl(JsonNode node, int depth) {
     printf("Error\n");
     break;
   case JsonNodeKind::STRING: {
-    auto string = get_string(node.get_value().string_start, node.get_data());
-    std::cout << '"' << string << '"' << std::endl;
+    std::cout << '"' << as_string(node).value() << '"' << std::endl;
     break;
   }
   case JsonNodeKind::NUMBER:
-    std::cout << node.get_value().number << std::endl;
+    std::cout << as_number(node).value() << std::endl;
     break;
   case JsonNodeKind::BOOLEAN:
-    std::cout << node.get_value().boolean << std::endl;
+    std::cout << as_boolean(node).value() << std::endl;
     break;
   case JsonNodeKind::OBJECT: {
-  case JsonNodeKind::ARRAY:
     std::cout << "{Object}\n";
-    auto start = node.get_value().nodes_start;
-    auto len = node.get_data();
-    auto nodes = get_nodes(start, len);
-    for (JsonNode node : nodes) {
+    std::span<JsonNode> children = as_object(node).value();
+    for (JsonNode node : children) {
       debug_print_impl(node, depth + 1);
     }
     break;
   }
+  case JsonNodeKind::ARRAY: {
+    std::cout << "[Array]\n";
+    std::span<JsonNode> children = as_array(node).value();
+    for (JsonNode node : children) {
+      debug_print_impl(node, depth + 1);
+    }
+    break;
+  }
+
   case JsonNodeKind::NIL:
     printf("null\n");
     break;
@@ -106,69 +112,50 @@ void JsonArena::debug_print_impl(JsonNode node, int depth) {
 
 void JsonArena::debug_print(JsonNode node) { debug_print_impl(node, 0); }
 
-int JsonParser::peek() const { return current; }
-
-int JsonParser::next() {
-  if (current == '\n') {
-    line++;
-    column = 0;
-  } else if (current != EOF) {
-    column++;
+std::optional<std::string_view> JsonArena::as_string(JsonNode node) {
+  if (node.get_kind() == JsonNodeKind::STRING) {
+    return get_string(node.get_value().string_start, node.get_data());
   }
-
-  int prev = current;
-  current = file.get();
-  return prev;
+  return {};
 }
-
-int JsonParser::eat(char c) {
-  int peek = current;
-  if (peek == c) {
-    next();
-    return peek;
+std::optional<double> JsonArena::as_number(JsonNode node) const {
+  if (node.get_kind() == JsonNodeKind::NUMBER) {
+    return node.get_value().number;
   }
-  return 0;
+  return {};
 }
-
-bool JsonParser::at(char c) const { return current == c; }
-
-void JsonParser::error(const char *message) {
-  errors.push_back(ParseError{line, column, message});
-}
-
-void JsonParser::report_errors(const char *filename) const {
-  for (const ParseError &error : errors) {
-    printf("%s:%d:%d %s\n", filename, error.line, error.column, error.message);
+std::optional<bool> JsonArena::as_boolean(JsonNode node) const {
+  if (node.get_kind() == JsonNodeKind::BOOLEAN) {
+    return node.get_value().boolean;
   }
+  return {};
 }
-
-void whitespace(JsonParser &p);
-void hex_escape(JsonParser &p, JsonArena &arena);
-JsonNode string(JsonParser &p, JsonArena &arena);
-JsonNode number(JsonParser &p, JsonArena &arena);
-std::optional<JsonNode> value(JsonParser &p, JsonArena &arena);
-JsonNode array(JsonParser &p, JsonArena &arena);
-JsonNode object(JsonParser &p, JsonArena &arena);
-
-// whitespace
-//     [ \n\r\t]*
-void whitespace(JsonParser &p) {
-  while (true) {
-    switch (p.peek()) {
-    case ' ':
-    case '\n':
-    case '\r':
-    case '\t':
-      p.next();
-      continue;
-    default:
-      return;
-    }
+std::optional<std::span<JsonNode>> JsonArena::as_object(JsonNode node) {
+  if (node.get_kind() == JsonNodeKind::OBJECT) {
+    NodeIndex start = node.get_value().nodes_start;
+    size_t len = node.get_data();
+    return get_nodes(start, len);
   }
+  return {};
 }
+std::optional<std::span<JsonNode>> JsonArena::as_array(JsonNode node) {
+  if (node.get_kind() == JsonNodeKind::ARRAY) {
+    NodeIndex start = node.get_value().nodes_start;
+    size_t len = node.get_data();
+    return get_nodes(start, len);
+  }
+  return {};
+}
+
+void hex_escape(Parser &p, JsonArena &arena);
+JsonNode string(Parser &p, JsonArena &arena);
+JsonNode number(Parser &p, JsonArena &arena);
+std::optional<JsonNode> value(Parser &p, JsonArena &arena);
+JsonNode array(Parser &p, JsonArena &arena);
+JsonNode object(Parser &p, JsonArena &arena);
 
 // u[0-9abcdf]{4}
-void hex_escape(JsonParser &p, JsonArena &arena) {
+void hex_escape(Parser &p, JsonArena &arena) {
   uint8_t value = 0;
   for (int j = 0; j < 2; j++) {
     for (int i = 0; i < 2; i++) {
@@ -193,7 +180,7 @@ void hex_escape(JsonParser &p, JsonArena &arena) {
   }
 }
 
-JsonNode string(JsonParser &p, JsonArena &arena) {
+JsonNode string(Parser &p, JsonArena &arena) {
   if (!p.eat('"')) {
     p.error("Expected string start");
   }
@@ -264,7 +251,7 @@ size_t string_view_to_double(std::string_view str, double &result) {
 
 // number
 //     '-'? [0-9]+ ('.' [0-9]+)? (('E' | 'e') ('+' | '-')? [0-9]+)?
-JsonNode number(JsonParser &p, JsonArena &arena) {
+JsonNode number(Parser &p, JsonArena &arena) {
   // we are repurposing the back of the string arena as scratch space
   // and will reset it back when we're done
   // make sure that no one else is addings strings to the arena!!!
@@ -277,49 +264,49 @@ JsonNode number(JsonParser &p, JsonArena &arena) {
     }
 
     // [0-9]
-    if ((c = p.tryConsume(isdigit))) {
+    if ((c = p.try_consume(isdigit))) {
       arena.string_push(c);
     } else {
       p.error("Expected digit");
     }
 
     // [0-9]*
-    while ((c = p.tryConsume(isdigit))) {
+    while ((c = p.try_consume(isdigit))) {
       arena.string_push(c);
     }
 
     if ((c = p.eat('.'))) {
       // [0-9]
-      if ((c = p.tryConsume(isdigit))) {
+      if ((c = p.try_consume(isdigit))) {
         arena.string_push(c);
       } else {
         p.error("Expected digit");
       }
 
       // [0-9]*
-      while ((c = p.tryConsume(isdigit))) {
+      while ((c = p.try_consume(isdigit))) {
         arena.string_push(c);
       }
     }
 
     auto match_e = [](int c) { return c == 'e' || c == 'E'; };
-    if ((c = p.tryConsume(match_e))) {
+    if ((c = p.try_consume(match_e))) {
       arena.string_push(c);
 
       auto match_op = [](int c) { return c == '+' || c == '-'; };
-      if ((c = p.tryConsume(match_op))) {
+      if ((c = p.try_consume(match_op))) {
         arena.string_push(c);
       }
 
       // [0-9]
-      if ((c = p.tryConsume(isdigit))) {
+      if ((c = p.try_consume(isdigit))) {
         arena.string_push(c);
       } else {
         p.error("Expected digit");
       }
 
       // [0-9]*
-      while ((c = p.tryConsume(isdigit))) {
+      while ((c = p.try_consume(isdigit))) {
         arena.string_push(c);
       }
     }
@@ -341,10 +328,10 @@ JsonNode number(JsonParser &p, JsonArena &arena) {
   }
 }
 
-std::optional<JsonNode> boolean(JsonParser &p, JsonArena &arena) {
+std::optional<JsonNode> boolean(Parser &p, JsonArena &arena) {
   StringIndex start = arena.string_position();
   int c;
-  while ((c = p.tryConsume(isalpha))) {
+  while ((c = p.try_consume(isalpha))) {
     arena.string_push(c);
   }
   arena.string_push('\0');
@@ -373,8 +360,8 @@ std::optional<JsonNode> boolean(JsonParser &p, JsonArena &arena) {
 //    array
 //    string
 //    number
-std::optional<JsonNode> value(JsonParser &p, JsonArena &arena) {
-  whitespace(p);
+std::optional<JsonNode> value(Parser &p, JsonArena &arena) {
+  p.consume_whitespace();
   switch (p.peek()) {
   case '{': {
     return object(p, arena);
@@ -406,7 +393,7 @@ std::optional<JsonNode> value(JsonParser &p, JsonArena &arena) {
   }
 }
 
-JsonNode array(JsonParser &p, JsonArena &arena) {
+JsonNode array(Parser &p, JsonArena &arena) {
   if (!p.eat('[')) {
     p.error("Expected array");
   }
@@ -419,14 +406,14 @@ JsonNode array(JsonParser &p, JsonArena &arena) {
     }
     arena.node_stack_push(node.value());
 
-    whitespace(p);
+    p.consume_whitespace();
 
     if (!p.eat(',')) {
       break;
     }
   }
 
-  whitespace(p);
+  p.consume_whitespace();
 
   if (!p.eat(']')) {
     p.error("Expected closing ]");
@@ -436,14 +423,14 @@ JsonNode array(JsonParser &p, JsonArena &arena) {
   return JsonNode::array(pair.first, pair.second);
 }
 
-JsonNode object(JsonParser &p, JsonArena &arena) {
+JsonNode object(Parser &p, JsonArena &arena) {
   if (!p.eat('{')) {
     p.error("Expected array");
   }
   NodeStackIndex start = arena.node_stack_position();
 
   while (1) {
-    whitespace(p);
+    p.consume_whitespace();
 
     if (p.at('"')) {
       JsonNode name = string(p, arena);
@@ -463,14 +450,14 @@ JsonNode object(JsonParser &p, JsonArena &arena) {
     }
     arena.node_stack_push(node.value());
 
-    whitespace(p);
+    p.consume_whitespace();
 
     if (!p.eat(',')) {
       break;
     }
   }
 
-  whitespace(p);
+  p.consume_whitespace();
 
   if (!p.eat('}')) {
     p.error("Expected closing ]");
@@ -480,7 +467,7 @@ JsonNode object(JsonParser &p, JsonArena &arena) {
   return JsonNode::object(pair.first, pair.second);
 }
 
-JsonNode parse_json(JsonParser &p, JsonArena &arena) {
+JsonNode parse_json(Parser &p, JsonArena &arena) {
   auto node = value(p, arena);
   if (node.has_value()) {
     return node.value();

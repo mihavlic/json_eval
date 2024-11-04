@@ -5,7 +5,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -fsanitize=address")
 
 add_executable(
   json_eval
-  util.cpp
   main.cpp
   json.cpp
+  parser.cpp
+  util.cpp
 )
