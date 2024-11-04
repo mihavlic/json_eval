@@ -31,8 +31,7 @@ Value eval(AstNode expression, Evaluator &ev) {
     return Value::boolean(ev.arena.as_boolean(expression).value());
   case NodeKind::OBJECT:
   case NodeKind::ARRAY:
-    ev.error("Unexpected node in expression");
-    return Value::error();
+    return Value::json(expression);
   case NodeKind::NIL:
     return Value::nil();
   case NodeKind::Add:
@@ -104,7 +103,7 @@ Value map_lookup(AstNode json_map, std::string_view key, Evaluator &ev) {
       std::string_view name = ev.arena.as_string_like(child).value();
       if (name.compare(key) == 0) {
         AstNode value = children[i + 1];
-        return Value::json(value);
+        return eval(value, ev);
       }
     }
   }
@@ -133,7 +132,8 @@ Value builtin_subscript(AstNode expression, Evaluator &ev) {
   size_t offset = (size_t)r.get_data().number;
 
   if (json.get_kind() == NodeKind::ARRAY) {
-    return Value::json(ev.arena.as_array_like(json).value()[offset]);
+    AstNode node = ev.arena.as_array_like(json).value()[offset];
+    return eval(node, ev);
   } else {
     ev.error("Subscript can only be applied on json arrays");
     return Value::error();
