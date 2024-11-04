@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <fstream>
-#include <optional>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -54,16 +53,15 @@ union JsonNodeValue {
 };
 
 class JsonNode {
-  JsonNodeKind kind : 3;
-  size_t data : 61;
+  size_t data;
   JsonNodeValue value;
 
 public:
   JsonNode() = default;
   JsonNode(JsonNodeKind kind, size_t data, JsonNodeValue value);
 
-  JsonNodeKind get_kind() const { return kind; }
-  size_t get_data() const { return data; }
+  JsonNodeKind get_kind() const { return (JsonNodeKind)(data & 7); }
+  size_t get_data() const { return data >> 3; }
   JsonNodeValue get_value() const { return value; }
 
   static JsonNode string(StringIndex start, size_t len) {
@@ -95,7 +93,7 @@ public:
 };
 
 struct JsonField {
-  std::string_view name;
+  JsonNode name;
   JsonNode value;
 };
 
@@ -130,13 +128,13 @@ public:
     string_arena.resize(previous_position.raw());
   }
 
+  std::span<JsonNode> get_nodes(NodeIndex start, size_t len);
+
   NodeStackIndex node_stack_position() const {
     return NodeStackIndex(node_stack.size());
   }
 
-  std::span<JsonNode> get_node_stack(NodeStackIndex start, size_t len) {
-    return std::span(node_stack.data() + start.raw(), len);
-  }
+  std::span<JsonNode> get_node_stack(NodeStackIndex start, size_t len);
 
   std::span<JsonNode> get_node_stack_between(NodeStackIndex start,
                                              NodeStackIndex end);
@@ -148,6 +146,9 @@ public:
   void node_stack_push(JsonNode node) { node_stack.push_back(node); }
 
   std::pair<NodeIndex, size_t> node_stack_finish(NodeStackIndex start);
+
+  void debug_print_impl(JsonNode node, int depth);
+  void debug_print(JsonNode node);
 };
 
 struct ParseError {
@@ -157,15 +158,15 @@ struct ParseError {
 };
 
 class JsonParser {
-  std::ifstream file;
+  std::ifstream &file;
   int current;
   int line;
   int column;
   std::vector<ParseError> errors;
 
 public:
-  JsonParser(std::ifstream &&file) : file(std::move(file)), line(0), column(0) {
-    current = this->file.peek();
+  JsonParser(std::ifstream &file) : file(file), line(0), column(0) {
+    current = this->file.get();
   }
 
   int peek() const;
@@ -186,18 +187,8 @@ public:
   bool at(char c) const;
 
   void error(const char *message);
+
+  void report_errors(const char *filename) const;
 };
 
-void whitespace(JsonParser &p);
-
-void hex_escape(JsonParser &p, JsonArena &arena);
-
-JsonNode string(JsonParser &p, JsonArena &arena);
-
-JsonNode number(JsonParser &p, JsonArena &arena);
-
-std::optional<JsonNode> value(JsonParser &p, JsonArena &arena);
-
-JsonNode array(JsonParser &p, JsonArena &arena);
-
-JsonNode object(JsonParser &p, JsonArena &arena);
+JsonNode parse_json(JsonParser &p, JsonArena &arena);

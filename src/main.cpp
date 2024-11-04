@@ -1,3 +1,4 @@
+#include "json.h"
 #include "util.h"
 #include <cstdio>
 #include <cstdlib>
@@ -21,15 +22,15 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  // argv[0] is the executable path, so we expect 3 args in total
-  if (argc != 3) {
-    LOG_ERROR("Expected 2 arguments");
-    print_help();
-    return 1;
-  }
+  // // argv[0] is the executable path, so we expect 3 args in total
+  // if (argc != 3) {
+  //   LOG_ERROR("Expected 2 arguments");
+  //   print_help();
+  //   return 1;
+  // }
 
   const char *path = argv[1];
-  const char *expression = argv[2];
+  // const char *expression = argv[2];
 
   std::ifstream file(path);
   if (file.fail()) {
@@ -38,7 +39,12 @@ int main(int argc, const char *argv[]) {
     return 1;
   }
 
-  (void)expression;
+  JsonArena json_arena{};
+  JsonParser parser(file);
+
+  auto v = parse_json(parser, json_arena);
+  json_arena.debug_print(v);
+  parser.report_errors(path);
 
   return 0;
 }
