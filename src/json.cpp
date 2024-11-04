@@ -26,19 +26,19 @@ std::string_view JsonArena::get_string_between(StringIndex start,
   return std::string_view(string_arena.data() + start.raw(), len);
 }
 
-std::span<JsonNode> JsonArena::get_child_nodes_between(TemporaryNodeIndex start,
-                                                       TemporaryNodeIndex end) {
+std::span<JsonNode> JsonArena::get_node_stack_between(NodeStackIndex start,
+                                                      NodeStackIndex end) {
   size_t len = 0;
   if (start.raw() < end.raw()) {
     len = end.raw() - start.raw();
   }
-  return std::span(open_children.data() + start.raw(), len);
+  return std::span(node_stack.data() + start.raw(), len);
 }
 
 std::pair<NodeIndex, size_t>
-JsonArena::child_nodes_finish(TemporaryNodeIndex start) {
+JsonArena::node_stack_finish(NodeStackIndex start) {
   std::span<JsonNode> children =
-      get_child_nodes_between(start, child_nodes_position());
+      get_node_stack_between(start, node_stack_position());
   size_t children_len = children.size();
 
   NodeIndex new_start(node_arena.size());
@@ -46,7 +46,7 @@ JsonArena::child_nodes_finish(TemporaryNodeIndex start) {
     node_arena.push_back(node);
   }
 
-  child_nodes_truncate(start);
+  node_stack_truncate(start);
 
   return {new_start, children_len};
 }
@@ -308,14 +308,14 @@ JsonNode array(JsonParser &p, JsonArena &arena) {
   if (!p.eat('[')) {
     p.error("Expected array");
   }
-  TemporaryNodeIndex start = arena.child_nodes_position();
+  NodeStackIndex start = arena.node_stack_position();
 
   while (1) {
     auto node = value(p, arena);
     if (!node.has_value()) {
       break;
     }
-    arena.child_nodes_push(node.value());
+    arena.node_stack_push(node.value());
 
     whitespace(p);
 
@@ -330,7 +330,7 @@ JsonNode array(JsonParser &p, JsonArena &arena) {
     p.error("Expected closing ]");
   }
 
-  auto pair = arena.child_nodes_finish(start);
+  auto pair = arena.node_stack_finish(start);
   return JsonNode::array(pair.first, pair.second);
 }
 
@@ -338,14 +338,14 @@ JsonNode object(JsonParser &p, JsonArena &arena) {
   if (!p.eat('{')) {
     p.error("Expected array");
   }
-  TemporaryNodeIndex start = arena.child_nodes_position();
+  NodeStackIndex start = arena.node_stack_position();
 
   while (1) {
     whitespace(p);
 
     if (p.at('"')) {
       JsonNode name = string(p, arena);
-      arena.child_nodes_push(name);
+      arena.node_stack_push(name);
     } else {
       break;
     }
@@ -355,7 +355,7 @@ JsonNode object(JsonParser &p, JsonArena &arena) {
       p.error("Expected value");
       node = {JsonNode::error()};
     }
-    arena.child_nodes_push(node.value());
+    arena.node_stack_push(node.value());
 
     whitespace(p);
 
@@ -370,6 +370,6 @@ JsonNode object(JsonParser &p, JsonArena &arena) {
     p.error("Expected closing ]");
   }
 
-  auto pair = arena.child_nodes_finish(start);
+  auto pair = arena.node_stack_finish(start);
   return JsonNode::object(pair.first, pair.second);
 }

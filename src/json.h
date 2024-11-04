@@ -37,12 +37,12 @@ public:
   size_t raw() const { return index; }
 };
 
-class TemporaryNodeIndex {
+class NodeStackIndex {
   size_t index;
 
 public:
-  TemporaryNodeIndex() = default;
-  TemporaryNodeIndex(size_t index) : index(index) {}
+  NodeStackIndex() = default;
+  NodeStackIndex(size_t index) : index(index) {}
   size_t raw() const { return index; }
 };
 
@@ -110,7 +110,7 @@ struct JsonArray {
 class JsonArena {
   std::vector<char> string_arena;
   std::vector<JsonNode> node_arena;
-  std::vector<JsonNode> open_children;
+  std::vector<JsonNode> node_stack;
 
 public:
   JsonArena() = default;
@@ -130,27 +130,24 @@ public:
     string_arena.resize(previous_position.raw());
   }
 
-  TemporaryNodeIndex child_nodes_position() const {
-    return TemporaryNodeIndex(open_children.size());
+  NodeStackIndex node_stack_position() const {
+    return NodeStackIndex(node_stack.size());
   }
 
-  std::span<JsonNode> get_child_nodes(TemporaryNodeIndex start, size_t len) {
-    return std::span(open_children.data() + start.raw(), len);
+  std::span<JsonNode> get_node_stack(NodeStackIndex start, size_t len) {
+    return std::span(node_stack.data() + start.raw(), len);
   }
 
-  std::span<JsonNode> get_child_nodes_between(TemporaryNodeIndex start,
-                                              TemporaryNodeIndex end);
+  std::span<JsonNode> get_node_stack_between(NodeStackIndex start,
+                                             NodeStackIndex end);
 
-  // This method is dangerous!
-  // Use it only to remove termporarily allocated strings
-  // before anyone else added a string.
-  void child_nodes_truncate(TemporaryNodeIndex previous_position) {
-    open_children.resize(previous_position.raw());
+  void node_stack_truncate(NodeStackIndex previous_position) {
+    node_stack.resize(previous_position.raw());
   }
 
-  void child_nodes_push(JsonNode node) { open_children.push_back(node); }
+  void node_stack_push(JsonNode node) { node_stack.push_back(node); }
 
-  std::pair<NodeIndex, size_t> child_nodes_finish(TemporaryNodeIndex start);
+  std::pair<NodeIndex, size_t> node_stack_finish(NodeStackIndex start);
 };
 
 struct ParseError {
