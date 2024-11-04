@@ -23,4 +23,4 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug
 make -C build -DTEST=1
 ./build/src/json_eval
 ```
-Then run the testing script `test.sh`. And visually inspect the results.
+Then run the testing script `tests/test.sh`. And visually inspect the results.

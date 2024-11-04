@@ -12,7 +12,7 @@
             "program": "${workspaceFolder}/build/src/json_eval",
             "args": [
                 "tests/test.json",
-                "max(a.b[0], 10, a.b[1], 15)"
+                "max(a.b[0], 2)"
             ],
             "cwd": "${workspaceFolder}",
             "presentation": {

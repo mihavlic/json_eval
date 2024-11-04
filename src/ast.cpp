@@ -94,7 +94,10 @@ void Arena::debug_print_impl(AstNode node, int depth) {
     std::cout << as_number(node).value() << std::endl;
     break;
   case NodeKind::BOOLEAN:
-    std::cout << as_boolean(node).value() << std::endl;
+    if (as_boolean(node).value())
+      printf("true\n");
+    else
+      printf("false\n");
     break;
   case NodeKind::OBJECT: {
     debug_print_array(node, "{Object}", depth);
@@ -174,23 +177,6 @@ std::optional<std::span<AstNode>> Arena::as_array_like(AstNode node) {
   }
   return {};
 }
-// std::optional<std::span<AstNode>> Arena::as_array(AstNode node) {
-//   if (node.get_kind() == NodeKind::ARRAY) {
-//     NodeIndex start = node.get_value().nodes_start;
-//     size_t len = node.get_data();
-//     return get_nodes(start, len);
-//   }
-//   return {};
-// }
-// std::optional<Function> Arena::as_function(AstNode node) {
-//   if (kind_is_function(node.get_kind())) {
-//     NodeIndex start = node.get_value().nodes_start;
-//     size_t len = node.get_data();
-//     auto arguments = get_nodes(start, len);
-//     return Function{node.get_kind(), arguments};
-//   }
-//   return {};
-// }
 AstNode AstNode::function(NodeKind function, NodeIndex args_start,
                           size_t args_len) {
   assert(kind_is_function(function));

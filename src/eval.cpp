@@ -1,4 +1,5 @@
 #include "eval.h"
+#include <iostream>
 
 template <typename F>
 Value fold(AstNode expression, Evaluator &ev, F function) {
@@ -267,7 +268,7 @@ void Value::debug_print(Arena &arena) const {
     printf("%s\n", data.string.data());
     break;
   case ValueKind::NUMBER:
-    printf("%f\n", data.number);
+    std::cout << data.number << std::endl;
     break;
   case ValueKind::BOOLEAN:
     if (data.boolean)

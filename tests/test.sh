@@ -1,11 +1,23 @@
-BIN="build/src/json_eval"
+function test() {
+    echo ">>> $1"
+    echo -n "<<< "
+    ./build/src/json_eval tests/test.json "$1" | tail -n 1
+    echo -e "### Should be $2\n"
+}
 
-$BIN "tests/test.json" 'a.b[2].c'
-echo '> should be "test"'
+test "a.b[1]"       '2'
+test "a.b[2].c"     'test'
+test "a.b"          '[ 1, 2, { "c": "test" }, [11, 12] ]'
 
-$BIN "tests/test.json" 'max(1, 2, 15)'
-echo '> should be 15'
+# Expressions in the subscript operator []:
+test "a.b[a.b[1]].c" test
 
-# Test is broken I have no time
-$BIN "tests/test.json" 'size(a)'
-echo '> should be 1'
+# Intrinsic functions: min, max, size:
+test "max(a.b[0], a.b[1])"  2
+test "min(a.b[3])"          11
+# size - returns size of the passed object, array or string
+test "size(a)"              1
+test "size(a.b)"            4
+test "size(a.b[a.b[1]].c)"  4
+# Number literals:
+test "max(a.b[0], 10, a.b[1], 15)"     15
